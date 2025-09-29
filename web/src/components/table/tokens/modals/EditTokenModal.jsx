@@ -68,6 +68,7 @@ const EditTokenModal = (props) => {
     name: '',
     remain_quota: 500000,
     expired_time: -1,
+    expired_type: 0, // 0=手动设置，1=日卡，2=周卡
     unlimited_quota: false,
     model_limits_enabled: false,
     model_limits: [],
@@ -94,6 +95,17 @@ const EditTokenModal = (props) => {
     } else {
       formApiRef.current.setValue('expired_time', -1);
     }
+    // 使用快捷设置时，设置为手动模式
+    formApiRef.current.setValue('expired_type', 0);
+  };
+
+  const setExpiredType = (type) => {
+    if (!formApiRef.current) return;
+    formApiRef.current.setValue('expired_type', type);
+    if (type === 1 || type === 2) {
+      // 日卡或周卡模式，清空过期时间，等首次使用时设置
+      formApiRef.current.setValue('expired_time', -1);
+    }
   };
 
   const loadModels = async () => {
@@ -111,9 +123,9 @@ const EditTokenModal = (props) => {
         }
         return {
           label: (
-            <span className='flex items-center gap-1'>
+              <span className='flex items-center gap-1'>
               {icon}
-              {model}
+                {model}
             </span>
           ),
           value: model,
@@ -196,11 +208,11 @@ const EditTokenModal = (props) => {
 
   const generateRandomSuffix = () => {
     const characters =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
     let result = '';
     for (let i = 0; i < 6; i++) {
       result += characters.charAt(
-        Math.floor(Math.random() * characters.length),
+          Math.floor(Math.random() * characters.length),
       );
     }
     return result;
@@ -240,7 +252,7 @@ const EditTokenModal = (props) => {
       for (let i = 0; i < count; i++) {
         let { tokenCount: _tc, ...localInputs } = values;
         const baseName =
-          values.name.trim() === '' ? 'default' : values.name.trim();
+            values.name.trim() === '' ? 'default' : values.name.trim();
         if (i !== 0 || values.name.trim() === '') {
           localInputs.name = `${baseName}-${generateRandomSuffix()}`;
         } else {
@@ -279,291 +291,336 @@ const EditTokenModal = (props) => {
   };
 
   return (
-    <SideSheet
-      placement={isEdit ? 'right' : 'left'}
-      title={
-        <Space>
-          {isEdit ? (
-            <Tag color='blue' shape='circle'>
-              {t('更新')}
-            </Tag>
-          ) : (
-            <Tag color='green' shape='circle'>
-              {t('新建')}
-            </Tag>
-          )}
-          <Title heading={4} className='m-0'>
-            {isEdit ? t('更新令牌信息') : t('创建新的令牌')}
-          </Title>
-        </Space>
-      }
-      bodyStyle={{ padding: '0' }}
-      visible={props.visiable}
-      width={isMobile ? '100%' : 600}
-      footer={
-        <div className='flex justify-end bg-white'>
-          <Space>
-            <Button
-              theme='solid'
-              className='!rounded-lg'
-              onClick={() => formApiRef.current?.submitForm()}
-              icon={<IconSave />}
-              loading={loading}
-            >
-              {t('提交')}
-            </Button>
-            <Button
-              theme='light'
-              className='!rounded-lg'
-              type='primary'
-              onClick={handleCancel}
-              icon={<IconClose />}
-            >
-              {t('取消')}
-            </Button>
-          </Space>
-        </div>
-      }
-      closeIcon={null}
-      onCancel={() => handleCancel()}
-    >
-      <Spin spinning={loading}>
-        <Form
-          key={isEdit ? 'edit' : 'new'}
-          initValues={getInitValues()}
-          getFormApi={(api) => (formApiRef.current = api)}
-          onSubmit={submit}
-        >
-          {({ values }) => (
-            <div className='p-2'>
-              {/* 基本信息 */}
-              <Card className='!rounded-2xl shadow-sm border-0'>
-                <div className='flex items-center mb-2'>
-                  <Avatar size='small' color='blue' className='mr-2 shadow-md'>
-                    <IconKey size={16} />
-                  </Avatar>
-                  <div>
-                    <Text className='text-lg font-medium'>{t('基本信息')}</Text>
-                    <div className='text-xs text-gray-600'>
-                      {t('设置令牌的基本信息')}
-                    </div>
-                  </div>
-                </div>
-                <Row gutter={12}>
-                  <Col span={24}>
-                    <Form.Input
-                      field='name'
-                      label={t('名称')}
-                      placeholder={t('请输入名称')}
-                      rules={[{ required: true, message: t('请输入名称') }]}
-                      showClear
-                    />
-                  </Col>
-                  <Col span={24}>
-                    {groups.length > 0 ? (
-                      <Form.Select
-                        field='group'
-                        label={t('令牌分组')}
-                        placeholder={t('令牌分组，默认为用户的分组')}
-                        optionList={groups}
-                        renderOptionItem={renderGroupOption}
-                        showClear
-                        style={{ width: '100%' }}
-                      />
-                    ) : (
-                      <Form.Select
-                        placeholder={t('管理员未设置用户可选分组')}
-                        disabled
-                        label={t('令牌分组')}
-                        style={{ width: '100%' }}
-                      />
-                    )}
-                  </Col>
-                  <Col xs={24} sm={24} md={24} lg={10} xl={10}>
-                    <Form.DatePicker
-                      field='expired_time'
-                      label={t('过期时间')}
-                      type='dateTime'
-                      placeholder={t('请选择过期时间')}
-                      rules={[
-                        { required: true, message: t('请选择过期时间') },
-                        {
-                          validator: (rule, value) => {
-                            // 允许 -1 表示永不过期，也允许空值在必填校验时被拦截
-                            if (value === -1 || !value)
-                              return Promise.resolve();
-                            const time = Date.parse(value);
-                            if (isNaN(time)) {
-                              return Promise.reject(t('过期时间格式错误！'));
-                            }
-                            if (time <= Date.now()) {
-                              return Promise.reject(
-                                t('过期时间不能早于当前时间！'),
-                              );
-                            }
-                            return Promise.resolve();
-                          },
-                        },
-                      ]}
-                      showClear
-                      style={{ width: '100%' }}
-                    />
-                  </Col>
-                  <Col xs={24} sm={24} md={24} lg={14} xl={14}>
-                    <Form.Slot label={t('过期时间快捷设置')}>
-                      <Space wrap>
-                        <Button
-                          theme='light'
-                          type='primary'
-                          onClick={() => setExpiredTime(0, 0, 0, 0)}
-                        >
-                          {t('永不过期')}
-                        </Button>
-                        <Button
-                          theme='light'
-                          type='tertiary'
-                          onClick={() => setExpiredTime(1, 0, 0, 0)}
-                        >
-                          {t('一个月')}
-                        </Button>
-                        <Button
-                          theme='light'
-                          type='tertiary'
-                          onClick={() => setExpiredTime(0, 1, 0, 0)}
-                        >
-                          {t('一天')}
-                        </Button>
-                        <Button
-                          theme='light'
-                          type='tertiary'
-                          onClick={() => setExpiredTime(0, 0, 1, 0)}
-                        >
-                          {t('一小时')}
-                        </Button>
-                      </Space>
-                    </Form.Slot>
-                  </Col>
-                  {!isEdit && (
-                    <Col span={24}>
-                      <Form.InputNumber
-                        field='tokenCount'
-                        label={t('新建数量')}
-                        min={1}
-                        extraText={t('批量创建时会在名称后自动添加随机后缀')}
-                        rules={[
-                          { required: true, message: t('请输入新建数量') },
-                        ]}
-                        style={{ width: '100%' }}
-                      />
-                    </Col>
-                  )}
-                </Row>
-              </Card>
-
-              {/* 额度设置 */}
-              <Card className='!rounded-2xl shadow-sm border-0'>
-                <div className='flex items-center mb-2'>
-                  <Avatar size='small' color='green' className='mr-2 shadow-md'>
-                    <IconCreditCard size={16} />
-                  </Avatar>
-                  <div>
-                    <Text className='text-lg font-medium'>{t('额度设置')}</Text>
-                    <div className='text-xs text-gray-600'>
-                      {t('设置令牌可用额度和数量')}
-                    </div>
-                  </div>
-                </div>
-                <Row gutter={12}>
-                  <Col span={24}>
-                    <Form.AutoComplete
-                      field='remain_quota'
-                      label={t('额度')}
-                      placeholder={t('请输入额度')}
-                      type='number'
-                      disabled={values.unlimited_quota}
-                      extraText={renderQuotaWithPrompt(values.remain_quota)}
-                      rules={
-                        values.unlimited_quota
-                          ? []
-                          : [{ required: true, message: t('请输入额度') }]
-                      }
-                      data={[
-                        { value: 500000, label: '1$' },
-                        { value: 5000000, label: '10$' },
-                        { value: 25000000, label: '50$' },
-                        { value: 50000000, label: '100$' },
-                        { value: 250000000, label: '500$' },
-                        { value: 500000000, label: '1000$' },
-                      ]}
-                    />
-                  </Col>
-                  <Col span={24}>
-                    <Form.Switch
-                      field='unlimited_quota'
-                      label={t('无限额度')}
-                      size='large'
-                      extraText={t(
-                        '令牌的额度仅用于限制令牌本身的最大额度使用量，实际的使用受到账户的剩余额度限制',
-                      )}
-                    />
-                  </Col>
-                </Row>
-              </Card>
-
-              {/* 访问限制 */}
-              <Card className='!rounded-2xl shadow-sm border-0'>
-                <div className='flex items-center mb-2'>
-                  <Avatar
-                    size='small'
-                    color='purple'
-                    className='mr-2 shadow-md'
-                  >
-                    <IconLink size={16} />
-                  </Avatar>
-                  <div>
-                    <Text className='text-lg font-medium'>{t('访问限制')}</Text>
-                    <div className='text-xs text-gray-600'>
-                      {t('设置令牌的访问限制')}
-                    </div>
-                  </div>
-                </div>
-                <Row gutter={12}>
-                  <Col span={24}>
-                    <Form.Select
-                      field='model_limits'
-                      label={t('模型限制列表')}
-                      placeholder={t(
-                        '请选择该令牌支持的模型，留空支持所有模型',
-                      )}
-                      multiple
-                      optionList={models}
-                      extraText={t('非必要，不建议启用模型限制')}
-                      filter={selectFilter}
-                      autoClearSearchValue={false}
-                      searchPosition='dropdown'
-                      showClear
-                      style={{ width: '100%' }}
-                    />
-                  </Col>
-                  <Col span={24}>
-                    <Form.TextArea
-                      field='allow_ips'
-                      label={t('IP白名单')}
-                      placeholder={t('允许的IP，一行一个，不填写则不限制')}
-                      autosize
-                      rows={1}
-                      extraText={t('请勿过度信任此功能，IP可能被伪造')}
-                      showClear
-                      style={{ width: '100%' }}
-                    />
-                  </Col>
-                </Row>
-              </Card>
+      <SideSheet
+          placement={isEdit ? 'right' : 'left'}
+          title={
+            <Space>
+              {isEdit ? (
+                  <Tag color='blue' shape='circle'>
+                    {t('更新')}
+                  </Tag>
+              ) : (
+                  <Tag color='green' shape='circle'>
+                    {t('新建')}
+                  </Tag>
+              )}
+              <Title heading={4} className='m-0'>
+                {isEdit ? t('更新令牌信息') : t('创建新的令牌')}
+              </Title>
+            </Space>
+          }
+          bodyStyle={{ padding: '0' }}
+          visible={props.visiable}
+          width={isMobile ? '100%' : 600}
+          footer={
+            <div className='flex justify-end bg-white'>
+              <Space>
+                <Button
+                    theme='solid'
+                    className='!rounded-lg'
+                    onClick={() => formApiRef.current?.submitForm()}
+                    icon={<IconSave />}
+                    loading={loading}
+                >
+                  {t('提交')}
+                </Button>
+                <Button
+                    theme='light'
+                    className='!rounded-lg'
+                    type='primary'
+                    onClick={handleCancel}
+                    icon={<IconClose />}
+                >
+                  {t('取消')}
+                </Button>
+              </Space>
             </div>
-          )}
-        </Form>
-      </Spin>
-    </SideSheet>
+          }
+          closeIcon={null}
+          onCancel={() => handleCancel()}
+      >
+        <Spin spinning={loading}>
+          <Form
+              key={isEdit ? 'edit' : 'new'}
+              initValues={getInitValues()}
+              getFormApi={(api) => (formApiRef.current = api)}
+              onSubmit={submit}
+          >
+            {({ values }) => (
+                <div className='p-2'>
+                  {/* 基本信息 */}
+                  <Card className='!rounded-2xl shadow-sm border-0'>
+                    <div className='flex items-center mb-2'>
+                      <Avatar size='small' color='blue' className='mr-2 shadow-md'>
+                        <IconKey size={16} />
+                      </Avatar>
+                      <div>
+                        <Text className='text-lg font-medium'>{t('基本信息')}</Text>
+                        <div className='text-xs text-gray-600'>
+                          {t('设置令牌的基本信息')}
+                        </div>
+                      </div>
+                    </div>
+                    <Row gutter={12}>
+                      <Col span={24}>
+                        <Form.Input
+                            field='name'
+                            label={t('名称')}
+                            placeholder={t('请输入名称')}
+                            rules={[{ required: true, message: t('请输入名称') }]}
+                            showClear
+                        />
+                      </Col>
+                      <Col span={24}>
+                        {groups.length > 0 ? (
+                            <Form.Select
+                                field='group'
+                                label={t('令牌分组')}
+                                placeholder={t('令牌分组，默认为用户的分组')}
+                                optionList={groups}
+                                renderOptionItem={renderGroupOption}
+                                showClear
+                                style={{ width: '100%' }}
+                            />
+                        ) : (
+                            <Form.Select
+                                placeholder={t('管理员未设置用户可选分组')}
+                                disabled
+                                label={t('令牌分组')}
+                                style={{ width: '100%' }}
+                            />
+                        )}
+                      </Col>
+                      <Col xs={24} sm={24} md={24} lg={24} xl={24}>
+                        <Form.Select
+                            field='expired_type'
+                            label={t('过期类型')}
+                            placeholder={t('请选择过期类型')}
+                            optionList={[
+                              { value: 0, label: t('手动设置时间') },
+                              { value: 1, label: t('日卡（首次使用后1天过期）') },
+                              { value: 2, label: t('周卡（首次使用后7天过期）') },
+                            ]}
+                            rules={[{ required: true, message: t('请选择过期类型') }]}
+                            style={{ width: '100%' }}
+                            onChange={(value) => setExpiredType(value)}
+                        />
+                      </Col>
+                      <Col xs={24} sm={24} md={24} lg={10} xl={10}>
+                        <Form.DatePicker
+                            field='expired_time'
+                            label={t('过期时间')}
+                            type='dateTime'
+                            placeholder={t('请选择过期时间')}
+                            disabled={values.expired_type === 1 || values.expired_type === 2}
+                            rules={
+                              values.expired_type === 1 || values.expired_type === 2
+                                  ? []
+                                  : [
+                                    { required: true, message: t('请选择过期时间') },
+                                    {
+                                      validator: (rule, value) => {
+                                        // 允许 -1 表示永不过期，也允许空值在必填校验时被拦截
+                                        if (value === -1 || !value)
+                                          return Promise.resolve();
+                                        const time = Date.parse(value);
+                                        if (isNaN(time)) {
+                                          return Promise.reject(t('过期时间格式错误！'));
+                                        }
+                                        if (time <= Date.now()) {
+                                          return Promise.reject(
+                                              t('过期时间不能早于当前时间！'),
+                                          );
+                                        }
+                                        return Promise.resolve();
+                                      },
+                                    },
+                                  ]
+                            }
+                            showClear
+                            style={{ width: '100%' }}
+                            extraText={
+                              values.expired_type === 1
+                                  ? t('日卡模式下，首次使用令牌时自动设置过期时间')
+                                  : values.expired_type === 2
+                                      ? t('周卡模式下，首次使用令牌时自动设置过期时间')
+                                      : ''
+                            }
+                        />
+                      </Col>
+                      <Col xs={24} sm={24} md={24} lg={14} xl={14}>
+                        <Form.Slot label={t('过期时间快捷设置')}>
+                          <Space wrap>
+                            <Button
+                                theme='light'
+                                type='primary'
+                                onClick={() => setExpiredTime(0, 0, 0, 0)}
+                                disabled={values.expired_type === 1 || values.expired_type === 2}
+                            >
+                              {t('永不过期')}
+                            </Button>
+                            <Button
+                                theme='light'
+                                type='secondary'
+                                onClick={() => setExpiredType(1)}
+                            >
+                              {t('日卡')}
+                            </Button>
+                            <Button
+                                theme='light'
+                                type='secondary'
+                                onClick={() => setExpiredType(2)}
+                            >
+                              {t('周卡')}
+                            </Button>
+                            <Button
+                                theme='light'
+                                type='tertiary'
+                                onClick={() => setExpiredTime(1, 0, 0, 0)}
+                                disabled={values.expired_type === 1 || values.expired_type === 2}
+                            >
+                              {t('一个月')}
+                            </Button>
+                            <Button
+                                theme='light'
+                                type='tertiary'
+                                onClick={() => setExpiredTime(0, 1, 0, 0)}
+                                disabled={values.expired_type === 1 || values.expired_type === 2}
+                            >
+                              {t('一天')}
+                            </Button>
+                            <Button
+                                theme='light'
+                                type='tertiary'
+                                onClick={() => setExpiredTime(0, 0, 1, 0)}
+                                disabled={values.expired_type === 1 || values.expired_type === 2}
+                            >
+                              {t('一小时')}
+                            </Button>
+                          </Space>
+                        </Form.Slot>
+                      </Col>
+                      {!isEdit && (
+                          <Col span={24}>
+                            <Form.InputNumber
+                                field='tokenCount'
+                                label={t('新建数量')}
+                                min={1}
+                                extraText={t('批量创建时会在名称后自动添加随机后缀')}
+                                rules={[
+                                  { required: true, message: t('请输入新建数量') },
+                                ]}
+                                style={{ width: '100%' }}
+                            />
+                          </Col>
+                      )}
+                    </Row>
+                  </Card>
+
+                  {/* 额度设置 */}
+                  <Card className='!rounded-2xl shadow-sm border-0'>
+                    <div className='flex items-center mb-2'>
+                      <Avatar size='small' color='green' className='mr-2 shadow-md'>
+                        <IconCreditCard size={16} />
+                      </Avatar>
+                      <div>
+                        <Text className='text-lg font-medium'>{t('额度设置')}</Text>
+                        <div className='text-xs text-gray-600'>
+                          {t('设置令牌可用额度和数量')}
+                        </div>
+                      </div>
+                    </div>
+                    <Row gutter={12}>
+                      <Col span={24}>
+                        <Form.AutoComplete
+                            field='remain_quota'
+                            label={t('额度')}
+                            placeholder={t('请输入额度')}
+                            type='number'
+                            disabled={values.unlimited_quota}
+                            extraText={renderQuotaWithPrompt(values.remain_quota)}
+                            rules={
+                              values.unlimited_quota
+                                  ? []
+                                  : [{ required: true, message: t('请输入额度') }]
+                            }
+                            data={[
+                              { value: 500000, label: '1$' },
+                              { value: 5000000, label: '10$' },
+                              { value: 25000000, label: '50$' },
+                              { value: 50000000, label: '100$' },
+                              { value: 250000000, label: '500$' },
+                              { value: 500000000, label: '1000$' },
+                            ]}
+                        />
+                      </Col>
+                      <Col span={24}>
+                        <Form.Switch
+                            field='unlimited_quota'
+                            label={t('无限额度')}
+                            size='large'
+                            extraText={t(
+                                '令牌的额度仅用于限制令牌本身的最大额度使用量，实际的使用受到账户的剩余额度限制',
+                            )}
+                        />
+                      </Col>
+                    </Row>
+                  </Card>
+
+                  {/* 访问限制 */}
+                  <Card className='!rounded-2xl shadow-sm border-0'>
+                    <div className='flex items-center mb-2'>
+                      <Avatar
+                          size='small'
+                          color='purple'
+                          className='mr-2 shadow-md'
+                      >
+                        <IconLink size={16} />
+                      </Avatar>
+                      <div>
+                        <Text className='text-lg font-medium'>{t('访问限制')}</Text>
+                        <div className='text-xs text-gray-600'>
+                          {t('设置令牌的访问限制')}
+                        </div>
+                      </div>
+                    </div>
+                    <Row gutter={12}>
+                      <Col span={24}>
+                        <Form.Select
+                            field='model_limits'
+                            label={t('模型限制列表')}
+                            placeholder={t(
+                                '请选择该令牌支持的模型，留空支持所有模型',
+                            )}
+                            multiple
+                            optionList={models}
+                            extraText={t('非必要，不建议启用模型限制')}
+                            filter={selectFilter}
+                            autoClearSearchValue={false}
+                            searchPosition='dropdown'
+                            showClear
+                            style={{ width: '100%' }}
+                        />
+                      </Col>
+                      <Col span={24}>
+                        <Form.TextArea
+                            field='allow_ips'
+                            label={t('IP白名单')}
+                            placeholder={t('允许的IP，一行一个，不填写则不限制')}
+                            autosize
+                            rows={1}
+                            extraText={t('请勿过度信任此功能，IP可能被伪造')}
+                            showClear
+                            style={{ width: '100%' }}
+                        />
+                      </Col>
+                    </Row>
+                  </Card>
+                </div>
+            )}
+          </Form>
+        </Spin>
+      </SideSheet>
   );
 };
 

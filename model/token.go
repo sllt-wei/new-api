@@ -19,6 +19,8 @@ type Token struct {
 	CreatedTime        int64          `json:"created_time" gorm:"bigint"`
 	AccessedTime       int64          `json:"accessed_time" gorm:"bigint"`
 	ExpiredTime        int64          `json:"expired_time" gorm:"bigint;default:-1"` // -1 means never expired
+	ExpiredType        int            `json:"expired_type" gorm:"default:0"`          // 0=manual, 1=daily, 2=weekly
+	FirstUsedTime      int64          `json:"first_used_time" gorm:"bigint;default:0"` // 首次使用时间，0表示未使用
 	RemainQuota        int            `json:"remain_quota" gorm:"default:0"`
 	UnlimitedQuota     bool           `json:"unlimited_quota"`
 	ModelLimitsEnabled bool           `json:"model_limits_enabled"`
@@ -86,7 +88,29 @@ func ValidateUserToken(key string) (token *Token, err error) {
 		if token.Status != common.TokenStatusEnabled {
 			return token, errors.New("该令牌状态不可用")
 		}
-		if token.ExpiredTime != -1 && token.ExpiredTime < common.GetTimestamp() {
+
+		// 处理日卡/周卡的过期逻辑
+		currentTime := common.GetTimestamp()
+		if token.ExpiredType == 1 || token.ExpiredType == 2 { // 日卡或周卡
+			if token.FirstUsedTime == 0 {
+				// 首次使用，设置首次使用时间和过期时间
+				token.FirstUsedTime = currentTime
+				if token.ExpiredType == 1 { // 日卡
+					token.ExpiredTime = currentTime + 24*60*60 // 1天后过期
+				} else if token.ExpiredType == 2 { // 周卡
+					token.ExpiredTime = currentTime + 7*24*60*60 // 7天后过期
+				}
+				// 更新数据库
+				if !common.RedisEnabled {
+					err := token.SelectUpdate()
+					if err != nil {
+						common.SysLog("failed to update token first used time: " + err.Error())
+					}
+				}
+			}
+		}
+
+		if token.ExpiredTime != -1 && token.ExpiredTime < currentTime {
 			if !common.RedisEnabled {
 				token.Status = common.TokenStatusExpired
 				err := token.SelectUpdate()
@@ -183,7 +207,7 @@ func (token *Token) Update() (err error) {
 			})
 		}
 	}()
-	err = DB.Model(token).Select("name", "status", "expired_time", "remain_quota", "unlimited_quota",
+	err = DB.Model(token).Select("name", "status", "expired_time", "expired_type", "first_used_time", "remain_quota", "unlimited_quota",
 		"model_limits_enabled", "model_limits", "allow_ips", "group").Updates(token).Error
 	return err
 }
@@ -200,7 +224,7 @@ func (token *Token) SelectUpdate() (err error) {
 		}
 	}()
 	// This can update zero values
-	return DB.Model(token).Select("accessed_time", "status").Updates(token).Error
+	return DB.Model(token).Select("accessed_time", "status", "first_used_time", "expired_time").Updates(token).Error
 }
 
 func (token *Token) Delete() (err error) {

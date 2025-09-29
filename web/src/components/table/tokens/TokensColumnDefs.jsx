@@ -60,6 +60,35 @@ function renderTimestamp(timestamp) {
   return <>{timestamp2string(timestamp)}</>;
 }
 
+// Render expired type column  新增
+const renderExpiredType = (text, record, t) => {
+  let tagColor = 'blue';
+  let tagText = t('手动设置');
+
+  if (text === 1) {
+    tagColor = 'orange';
+    tagText = t('日卡');
+  } else if (text === 2) {
+    tagColor = 'purple';
+    tagText = t('周卡');
+  }
+
+  const isFirstUsed = record.first_used_time > 0;
+  const extraText = (text === 1 || text === 2) && !isFirstUsed ? t('(未激活)') : '';
+
+  return (
+      <div className='flex flex-col items-center'>
+        <Tag color={tagColor} shape='circle' size='small'>
+          {tagText}
+        </Tag>
+        {extraText && (
+            <span className='text-xs text-gray-500 mt-1'>{extraText}</span>
+        )}
+      </div>
+  );
+};
+// 到这结束
+
 // Render status column only (no usage)
 const renderStatus = (text, record, t) => {
   const enabled = text === 1;
@@ -461,7 +490,7 @@ export const getTokensColumns = ({
       title: t('密钥'),
       key: 'token_key',
       render: (text, record) =>
-        renderTokenKey(text, record, showKeys, setShowKeys, copyText),
+          renderTokenKey(text, record, showKeys, setShowKeys, copyText),
     },
     {
       title: t('可用模型'),
@@ -481,14 +510,35 @@ export const getTokensColumns = ({
       },
     },
     {
+      title: t('过期类型'),
+      dataIndex: 'expired_type',
+      render: (text, record) => renderExpiredType(text, record, t),
+    },
+    {
       title: t('过期时间'),
       dataIndex: 'expired_time',
       render: (text, record, index) => {
-        return (
-          <div>
-            {record.expired_time === -1 ? t('永不过期') : renderTimestamp(text)}
-          </div>
-        );
+        if (record.expired_type === 1 || record.expired_type === 2) {
+          // 日卡或周卡
+          if (record.first_used_time === 0) {
+            return <div className='text-gray-500'>{t('首次使用时生效')}</div>;
+          } else {
+            return (
+                <div>
+                  {record.expired_time === -1 ? t('永不过期') : renderTimestamp(text)}
+                  <div className='text-xs text-gray-500 mt-1'>
+                    {t('激活时间')}: {renderTimestamp(record.first_used_time)}
+                  </div>
+                </div>
+            );
+          }
+        } else {
+          return (
+              <div>
+                {record.expired_time === -1 ? t('永不过期') : renderTimestamp(text)}
+              </div>
+          );
+        }
       },
     },
     {
@@ -496,16 +546,16 @@ export const getTokensColumns = ({
       dataIndex: 'operate',
       fixed: 'right',
       render: (text, record, index) =>
-        renderOperations(
-          text,
-          record,
-          onOpenLink,
-          setEditingToken,
-          setShowEdit,
-          manageToken,
-          refresh,
-          t,
-        ),
+          renderOperations(
+              text,
+              record,
+              onOpenLink,
+              setEditingToken,
+              setShowEdit,
+              manageToken,
+              refresh,
+              t,
+          ),
     },
   ];
 };
